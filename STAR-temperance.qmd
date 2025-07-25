@@ -7,7 +7,7 @@ execute:
 
 ```{r}
 #| message: false
-
+#| warning: false
 library(tidyverse)      
 library(gt)             
 library(tidymodels)     
@@ -169,47 +169,172 @@ tibble(
 Fit a linear regression model in which math score (`g4math`) is the outcome, and the predictors are class type (`kind`), race, and years spent in small classes (`yearssmall`). Fit this model to an object named `fit_cs`.
 
 ```{r}
+fit_cs <- lm(g4math ~ kind + race + yearssmall, data = x)
 
 ```
+
 
 After fitting the model, run `fit_cs` and be sure to display the confidence intervals. 
 
 ```{r}
-
+fit_cs <- lm(g4math ~ kind + race + yearssmall, data = x)
+tidy(fit_cs, conf.int = TRUE)
 ```
 
 Give the R code you used to fit your regression model to AI and ask it to create a LaTeX version of the regression equation that matches your model. Paste the LaTeX equation from AI below.
+
+$$
+\[
+\widehat{\text{g4math}} = 695\ -\ 1.95\,
+\text{I}(\text{kind} = \text{regular with aid})\ -\ 7.66\,
+\text{I}(\text{kind} = \text{small})\ +\ 38.7\,
+\text{I}(\text{race} = \text{others})\ +\ 16.3\,
+\text{I}(\text{race} = \text{white})\ +\ 2.18\,
+\text{yearssmall}
+\]
+$$
 
 
 ## Marginal Effects
 
 Start writing summary paragraph. (AI may be helpful for individual sentences but won't give you a paragraph at once.)
 
+Using our fitted model, we predicted 4th grade math scores for all students in the STAR dataset based on their classroom type, race, and number of years spent in small classes.
+
 Generate predicted scores for all students in the data. What does each row in the output represent?
+
+```{r}
+pred_all <- predictions(fit_cs)
+head(pred_all)
+
+```
+
 
 Generate predictions by class type (`kind`). 
 
+```{r}
+plot_predictions(fit_cs, by = "kind")
+
+```
+```{r}
+plot_predictions(fit_cs, by = c("kind","race"))
+
+```
+
 Visualize average predicted math score by class type using `plot_predictions()`.
+
+```{r}
+pred_data <- plot_predictions(fit_cs, by = "kind", draw = FALSE)
+head(pred_data)
+
+```
 
 
 The default `plot_predictions()` plots can be boring or hard to read. To create your own custom plot, start by extracting the prediction data using the `draw = FALSE` option. Save the resulting tibble as `pred_data`. Run `pred_data` to see the output.
 
+```{r}
+pred_data <- plot_predictions(fit_cs, by = "kind", draw = FALSE)
+
+```
+
 Give AI the output of `pred_data` and ask it to make a nice looking plot. Make sure that it has an accurate title, subtitle, axis labels, and caption. Paste your plot in the code chunk below.
 
+```{r}
+library(ggplot2)
+
+# Filter to only show predicted scores above 650
+pred_data_filtered <- pred_data |> 
+  filter(estimate > 650)
+
+ggplot(pred_data_filtered, aes(x = kind, y = estimate)) +
+  geom_col(fill = "#4B9CD3", width = 0.6) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, color = "black") +
+  labs(
+    title = "Predicted 4th Grade Math Scores by Class Type (Above 650)",
+    subtitle = "Filtered to show only classroom types with predicted scores > 650",
+    x = "Classroom Type",
+    y = "Predicted Math Score",
+    caption = "Source: Tennessee STAR dataset. Bars show predicted average scores with 95% confidence intervals."
+  ) +
+    coord_cartesian(ylim = c(700, 720)) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12),
+    axis.text.x = element_text(angle = 15, hjust = 1)
+  )
+
+
+```
 
 What does this plot tell you about the effect of class types on student `g4math` scores?
 
+Based on this model, class type does not appear to have a strong or statistically significant effect on 4th grade math scores. Predicted outcomes are similar across class types, with overlapping confidence intervals indicating uncertainty in the differences.
 
 Start experimenting with more detailed plots. Visualize predicted math scores by class type and race. Just use the basic `plot_predictions()` for now.
 
+```{r}
+plot_predictions(fit_cs, by = c("kind", "race"))
+
+```
 
 Now use `plot_predictions()` with `draw = FALSE` to get the raw predictions by class type. Save the resulting tibble as `pred_data2`. Run `pred_data2` to see the output. 
 
+```{r}
+pred_data2 <- plot_predictions(fit_cs, by = c("kind", "race"), draw = FALSE)
+pred_data2
+```
 
 Take the output from `pred_data2` and provide it to AI. Ask it to make a high-quality plot with a descriptive title, subtitle, caption, and labels. Paste your new plot below: 
 
+```{r}
+library(plotly)
+library(dplyr)
+
+# Optional: Clean up factor levels if needed
+pred_data2$kind <- factor(pred_data2$kind, levels = c("small", "regular", "regular with aid"))
+pred_data2$race <- factor(pred_data2$race, levels = c("black", "white", "others"))
+
+# Interactive plot
+plot_ly(
+  data = pred_data2,
+  x = ~kind,
+  y = ~estimate,
+  color = ~race,
+  colors = c("#1f77b4", "#ff7f0e", "#2ca02c"),
+  type = 'bar',
+  error_y = ~list(
+    type = "data",
+    symmetric = FALSE,
+    array = conf.high - estimate,
+    arrayminus = estimate - conf.low,
+    color = "black"
+  ),
+  text = ~paste0(
+    "Race: ", race, "<br>",
+    "Score: ", round(estimate, 1), "<br>",
+    "95% CI: [", round(conf.low, 1), ", ", round(conf.high, 1), "]"
+  ),
+  hoverinfo = "text"
+) %>%
+  layout(
+    barmode = "group",
+    title = list(
+      text = "Predicted 4th Grade Math Scores by Class Type and Race",
+      font = list(size = 18)
+    ),
+    xaxis = list(title = "Class Type"),
+    yaxis = list(title = "Predicted Math Score", range = c(680, 750)),
+    legend = list(title = list(text = "Race")),
+    margin = list(t = 80),
+    hoverlabel = list(bgcolor = "white", font = list(size = 12))
+  )
+
+```
+
 After finalizing your summary paragraph, paste it in the section below:
 
+Using a linear regression model, we predicted 4th grade math scores for students in the Tennessee STAR dataset based on classroom type (kind), race, and years spent in small classes. The results show that predicted math scores vary slightly by class type, but the differences are relatively small and not statistically significant. When examining predicted scores by both class type and race, we observed meaningful differences, particularly that White and Other race students tend to have higher predicted scores than Black students across all class types. However, the overlapping confidence intervals across classroom types suggest that classroom size alone may not be a strong determinant of academic performance when adjusting for race and years in small classes. These findings highlight the importance of considering multiple student characteristics—not just classroom environment—when interpreting academic outcomes.
 
 ## More Information
 
